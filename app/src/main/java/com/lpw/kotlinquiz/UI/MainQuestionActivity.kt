@@ -1,29 +1,40 @@
 package com.lpw.kotlinquiz.UI
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.drm.DrmStore
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.support.constraint.ConstraintLayout
 import android.support.design.widget.NavigationView
+import android.support.v4.content.LocalBroadcastManager
 import android.support.v4.view.GravityCompat
 import android.support.v4.view.ViewPager
 import android.support.v4.widget.DrawerLayout
 import android.support.v7.app.ActionBarDrawerToggle
 import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.GridLayoutManager
+import android.support.v7.widget.RecyclerView
 import android.support.v7.widget.Toolbar
+import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.Button
 import android.widget.TextView
 import com.github.javiersantos.materialstyleddialogs.MaterialStyledDialog
 import com.lpw.kotlinquiz.Adapter.GridAnswerAdapter
 import com.lpw.kotlinquiz.Adapter.MyFragmentAdapter
+import com.lpw.kotlinquiz.Adapter.QusetionListHelperAdapter
 import com.lpw.kotlinquiz.Common.Common
+import com.lpw.kotlinquiz.Common.SpaceItemDecoration
 import com.lpw.kotlinquiz.DBHelper.DBHelper
 import com.lpw.kotlinquiz.Fragments.QuestionFragment
 import com.lpw.kotlinquiz.Model.CurrentQuestion
 import com.lpw.kotlinquiz.R
+import kotlinx.android.synthetic.main.activity_main_question.*
 import kotlinx.android.synthetic.main.content_main_question.*
 import java.util.concurrent.TimeUnit
 
@@ -31,15 +42,45 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
 
     lateinit var countDownTimer: CountDownTimer
     var time_play = Common.TOTAL_TIME
+
+    var isAnswerModeView = false
+
     lateinit var adapter : GridAnswerAdapter
+    lateinit var questionHelperAdapter: QusetionListHelperAdapter
 
     lateinit var txt_wrong_answer:TextView
+
+    internal var goToQuestionNum:BroadcastReceiver = object:BroadcastReceiver(){
+        override fun onReceive(context: Context?, intent: Intent?) {
+          if(intent!!.action!!.toString()==Common.KEY_GO_TO_QUESTION){
+              val question = intent.getIntExtra(Common.KEY_GO_TO_QUESTION, -1)
+              if(question != -1){
+                  view_pager.currentItem = question
+                  drawer_layout.closeDrawer(Gravity.LEFT)
+              }
+          }
+        }
+
+    }
+
+    override fun onDestroy() {
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(goToQuestionNum)
+        if(countDownTimer!=null)
+            countDownTimer!!.cancel()
+        if(Common.fragmentList != null)
+            Common.fragmentList.clear()
+        if (Common.answerSheetList!=null)
+            Common.answerSheetList.clear()
+        super.onDestroy()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main_question)
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(goToQuestionNum, IntentFilter(Common.KEY_GO_TO_QUESTION))
 
         val drawerLayout: DrawerLayout = findViewById(R.id.drawer_layout)
         val navView: NavigationView = findViewById(R.id.nav_view)
@@ -50,6 +91,29 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
         toggle.syncState()
 
         navView.setNavigationItemSelectedListener(this)
+
+        val recycler_helper_answer_sheet = navView.getHeaderView(0).findViewById<View>(R.id.answer_sheet)as RecyclerView
+        recycler_helper_answer_sheet.setHasFixedSize(true)
+        recycler_helper_answer_sheet.layoutManager = GridLayoutManager(this,3)
+        recycler_helper_answer_sheet.addItemDecoration(SpaceItemDecoration(2))
+
+        val btnDone =  navView.getHeaderView(0).findViewById<View>(R.id.btn_done)as Button
+        btnDone.setOnClickListener {
+            if(!isAnswerModeView)
+            {
+                MaterialStyledDialog.Builder(this)
+                    .setTitle("Finish?")
+                    .setDescription("do you really wont to finish?")
+                    .setIcon(R.drawable.ic_mood_white_24dp)
+                    .setNegativeText("No")
+                    .onNegative { dialog, which ->  dialog.dismiss()}
+                    .setPositiveText("Yes")
+                    .onPositive { dialog, which ->  finishGame()
+                        drawer_layout.closeDrawer(Gravity.LEFT)
+                    }.show()
+            }else
+                finishGame()
+        }
 
         genQuestion()
 
@@ -136,6 +200,7 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                         val question_state: CurrentQuestion = questionFragment.selectedAnswer()
                         Common.answerSheetList[position] = question_state
                         adapter.notifyDataSetChanged()
+                        questionHelperAdapter.notifyDataSetChanged()
 
                         countCorrectAnswer()
 
@@ -148,12 +213,12 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                             questionFragment.disableAnswer()
                         }
                     }
-
                 }
-
             })
+            txt_right_answer.text = "${Common.right_answer_count}/${Common.questionList.size}"
+            questionHelperAdapter = QusetionListHelperAdapter(this, Common.answerSheetList)
+            recycler_helper_answer_sheet.adapter = questionHelperAdapter
         }
-
     }
 
     private fun countCorrectAnswer() {
@@ -207,7 +272,9 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
         val question_state: CurrentQuestion = questionFragment.selectedAnswer()
 
         Common.answerSheetList[position] = question_state
+
         adapter.notifyDataSetChanged()
+        questionHelperAdapter.notifyDataSetChanged()
 
         countCorrectAnswer()
 
@@ -260,7 +327,25 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
     }
 
     override fun onOptionsItemSelected(item: MenuItem?): Boolean {
-        return super.onOptionsItemSelected(item)
+        when(item!!.itemId){
+            R.id.menu_done -> {
+                if(!isAnswerModeView)
+                {
+                    MaterialStyledDialog.Builder(this)
+                        .setTitle("Finish?")
+                        .setDescription("do you really wont to finish?")
+                        .setIcon(R.drawable.ic_mood_white_24dp)
+                        .setNegativeText("No")
+                        .onNegative { dialog, which ->  dialog.dismiss()}
+                        .setPositiveText("Yes")
+                        .onPositive { dialog, which ->  finishGame()
+                            drawer_layout.closeDrawer(Gravity.LEFT)
+                        }.show()
+                }else
+                    finishGame()
+            }
+        }
+        return true
     }
 
 
