@@ -22,6 +22,7 @@ import java.lang.Exception
 class QuestionFragment : Fragment(), IAnswerSelect {
     override fun selectedAnswer(): CurrentQuestion {
         Common.selected_values.distinct()
+        Common.selected_values.sort()
 
         if (Common.answerSheetList[questionIndex].type == Common.ANSWER_TYPE.NO_ANSWER)
         {

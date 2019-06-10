@@ -21,6 +21,7 @@ object Common {
     var wrong_answer_count = 0
     var no_answer_count = 0
     var data_question = StringBuilder()
+    val KEY_GO_TO_QUESTION: String?="position_go_to"
 
     enum class ANSWER_TYPE{
         NO_ANSWER,
