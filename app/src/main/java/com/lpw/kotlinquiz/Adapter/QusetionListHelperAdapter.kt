@@ -57,7 +57,7 @@ class QusetionListHelperAdapter(internal var context: Context,
        lateinit var iOnRecyclerViewItemClickListener: IOnRecyclerItemClickListener
 
        fun setiOnRecyclerViewItemClickListener(iOnRecyclerItemClickListener: IOnRecyclerItemClickListener){
-           this.iOnRecyclerViewItemClickListener = iOnRecyclerViewItemClickListener
+           this.iOnRecyclerViewItemClickListener = iOnRecyclerItemClickListener
        }
 
        init {
