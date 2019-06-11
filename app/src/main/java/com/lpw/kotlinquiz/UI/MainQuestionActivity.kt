@@ -25,6 +25,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import com.github.javiersantos.materialstyleddialogs.MaterialStyledDialog
+import com.google.gson.Gson
 import com.lpw.kotlinquiz.Adapter.GridAnswerAdapter
 import com.lpw.kotlinquiz.Adapter.MyFragmentAdapter
 import com.lpw.kotlinquiz.Adapter.QusetionListHelperAdapter
@@ -36,9 +37,12 @@ import com.lpw.kotlinquiz.Model.CurrentQuestion
 import com.lpw.kotlinquiz.R
 import kotlinx.android.synthetic.main.activity_main_question.*
 import kotlinx.android.synthetic.main.content_main_question.*
+import java.lang.StringBuilder
 import java.util.concurrent.TimeUnit
 
 class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener {
+
+    val CODE_GET_RESULT = 9999
 
     lateinit var countDownTimer: CountDownTimer
     var time_play = Common.TOTAL_TIME
@@ -286,6 +290,13 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
             questionFragment.showCorrectAnswer()
             questionFragment.disableAnswer()
         }
+
+        val intent = Intent(this, ResultActivity::class.java)
+        Common.timer = Common.TOTAL_TIME - time_play
+        Common.no_answer_count = Common.questionList.size - (Common.right_answer_count+Common.wrong_answer_count)
+        Common.data_question = StringBuilder(Gson().toJson(Common.answerSheetList))
+
+        startActivityForResult(intent, CODE_GET_RESULT)
     }
 
     private fun genQuestion() {
@@ -309,6 +320,7 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
         if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
             drawerLayout.closeDrawer(GravityCompat.START)
         } else {
+            this.finish()
             super.onBackPressed()
         }
     }
