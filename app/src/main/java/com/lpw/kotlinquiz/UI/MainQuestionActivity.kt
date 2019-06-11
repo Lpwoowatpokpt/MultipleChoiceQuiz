@@ -1,10 +1,10 @@
 package com.lpw.kotlinquiz.UI
 
+import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.drm.DrmStore
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.support.constraint.ConstraintLayout
@@ -18,6 +18,7 @@ import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.GridLayoutManager
 import android.support.v7.widget.RecyclerView
 import android.support.v7.widget.Toolbar
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
@@ -37,7 +38,7 @@ import com.lpw.kotlinquiz.Model.CurrentQuestion
 import com.lpw.kotlinquiz.R
 import kotlinx.android.synthetic.main.activity_main_question.*
 import kotlinx.android.synthetic.main.content_main_question.*
-import java.lang.StringBuilder
+import kotlinx.android.synthetic.main.layout_question_list_helper_item.*
 import java.util.concurrent.TimeUnit
 
 class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener {
@@ -265,8 +266,7 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                 TimeUnit.MILLISECONDS.toSeconds(interval) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(interval))))
                 time_play-=1000
             }
-
-        }
+        }.start()
     }
 
     private fun finishGame() {
@@ -345,7 +345,7 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                 {
                     MaterialStyledDialog.Builder(this)
                         .setTitle("Finish?")
-                        .setDescription("do you really wont to finish?")
+                        .setDescription("do you really want to finish?")
                         .setIcon(R.drawable.ic_mood_white_24dp)
                         .setNegativeText("No")
                         .onNegative { dialog, which ->  dialog.dismiss()}
@@ -386,5 +386,67 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
         val drawerLayout: DrawerLayout = findViewById(R.id.drawer_layout)
         drawerLayout.closeDrawer(GravityCompat.START)
         return true
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if(requestCode == CODE_GET_RESULT){
+            if(resultCode == Activity.RESULT_OK){
+                val action = data!!.getStringExtra("action")
+                if (action == null || TextUtils.isEmpty(action)){
+                    val questionIndex = data.getIntExtra(Common.KEY_BACK_FROM_RESULT, -1)
+                    view_pager.currentItem = questionIndex
+
+                    isAnswerModeView = true
+                    countDownTimer!!.cancel()
+
+                    txt_wrong_answer.visibility = View.GONE
+                    txt_right_answer.visibility = View.GONE
+                    txt_timer.visibility = View.GONE
+                }
+                else
+                {
+                    if (action.equals("doquizagain"))
+                    {
+                        view_pager.currentItem = 0
+                        isAnswerModeView = false
+
+                        txt_wrong_answer.visibility = View.VISIBLE
+                        txt_right_answer.visibility = View.VISIBLE
+                        txt_timer.visibility = View.VISIBLE
+
+                        for (i in Common.fragmentList.indices)
+                        {
+                            Common.fragmentList[i].resetQuestion()
+                        }
+
+                        for (i in Common.answerSheetList.indices)
+                            Common.answerSheetList[i].type = Common.ANSWER_TYPE.NO_ANSWER
+
+                        adapter.notifyDataSetChanged()
+                        questionHelperAdapter.notifyDataSetChanged()
+
+                        countTimer()
+                    }
+                    else if(action.equals("viewanswer"))
+                    {
+                        view_pager.currentItem = 0
+                        isAnswerModeView = true
+                        countDownTimer!!.cancel()
+
+                        txt_wrong_answer.visibility = View.GONE
+                        txt_right_answer.visibility = View.GONE
+                        txt_timer.visibility = View.GONE
+
+                        for (i in Common.fragmentList.indices)
+                        {
+                            Common.fragmentList[i].showCorrectAnswer()
+                            Common.fragmentList[i].disableAnswer()
+                        }
+                    }
+                }
+            }
+        }
+
     }
 }
