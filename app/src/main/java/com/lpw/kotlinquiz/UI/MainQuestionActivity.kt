@@ -1,5 +1,6 @@
 package com.lpw.kotlinquiz.UI
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -26,6 +27,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import com.github.javiersantos.materialstyleddialogs.MaterialStyledDialog
+import com.google.firebase.database.FirebaseDatabase
 import com.google.gson.Gson
 import com.lpw.kotlinquiz.Adapter.GridAnswerAdapter
 import com.lpw.kotlinquiz.Adapter.MyFragmentAdapter
@@ -33,35 +35,40 @@ import com.lpw.kotlinquiz.Adapter.QusetionListHelperAdapter
 import com.lpw.kotlinquiz.Common.Common
 import com.lpw.kotlinquiz.Common.SpaceItemDecoration
 import com.lpw.kotlinquiz.DBHelper.DBHelper
+import com.lpw.kotlinquiz.DBHelper.OnlineDBHelper
 import com.lpw.kotlinquiz.Fragments.QuestionFragment
+import com.lpw.kotlinquiz.Interface.MyFirebaseCallback
 import com.lpw.kotlinquiz.Model.CurrentQuestion
+import com.lpw.kotlinquiz.Model.Question
 import com.lpw.kotlinquiz.R
 import kotlinx.android.synthetic.main.activity_main_question.*
 import kotlinx.android.synthetic.main.content_main_question.*
-import kotlinx.android.synthetic.main.layout_question_list_helper_item.*
 import java.util.concurrent.TimeUnit
 
-class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener {
+class MainQuestionActivity : AppCompatActivity(){
 
     val CODE_GET_RESULT = 9999
 
-    lateinit var countDownTimer: CountDownTimer
+
     var time_play = Common.TOTAL_TIME
 
     var isAnswerModeView = false
 
+    lateinit var countDownTimer: CountDownTimer
     lateinit var adapter : GridAnswerAdapter
     lateinit var questionHelperAdapter: QusetionListHelperAdapter
 
     lateinit var txt_wrong_answer:TextView
 
-    internal var goToQuestionNum:BroadcastReceiver = object:BroadcastReceiver(){
+    lateinit var  recycler_helper_answer_sheet:RecyclerView
+
+    private var goToQuestionNum:BroadcastReceiver = object:BroadcastReceiver(){
         override fun onReceive(context: Context?, intent: Intent?) {
           if(intent!!.action!!.toString()==Common.KEY_GO_TO_QUESTION){
               val question = intent.getIntExtra(Common.KEY_GO_TO_QUESTION, -1)
               if(question != -1){
                   view_pager.currentItem = question
-                  drawer_layout.closeDrawer(Gravity.LEFT)
+                  drawer_layout.closeDrawer(Gravity.START)
               }
           }
         }
@@ -79,6 +86,7 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
         super.onDestroy()
     }
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main_question)
@@ -95,9 +103,7 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
         drawerLayout.addDrawerListener(toggle)
         toggle.syncState()
 
-        navView.setNavigationItemSelectedListener(this)
-
-        val recycler_helper_answer_sheet = navView.getHeaderView(0).findViewById<View>(R.id.answer_sheet)as RecyclerView
+        recycler_helper_answer_sheet = navView.getHeaderView(0).findViewById<View>(R.id.answer_sheet)as RecyclerView
         recycler_helper_answer_sheet.setHasFixedSize(true)
         recycler_helper_answer_sheet.layoutManager = GridLayoutManager(this,3)
         recycler_helper_answer_sheet.addItemDecoration(SpaceItemDecoration(2))
@@ -111,9 +117,9 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                     .setDescription("do you really wont to finish?")
                     .setIcon(R.drawable.ic_mood_white_24dp)
                     .setNegativeText("No")
-                    .onNegative { dialog, which ->  dialog.dismiss()}
+                    .onNegative { dialog, _ ->  dialog.dismiss()}
                     .setPositiveText("Yes")
-                    .onPositive { dialog, which ->  finishGame()
+                    .onPositive { _, _ ->  finishGame()
                         drawer_layout.closeDrawer(Gravity.LEFT)
                     }.show()
             }else
@@ -121,7 +127,90 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
         }
 
         genQuestion()
+    }
 
+
+
+    private fun countCorrectAnswer() {
+        Common.right_answer_count = 0
+        Common.wrong_answer_count = 0
+
+        for (item in Common.answerSheetList)
+            if (item.type == Common.ANSWER_TYPE.RIGHT_ANSWER)
+                Common.right_answer_count++
+        else if(item.type == Common.ANSWER_TYPE.WRONG_ANSWER)
+                Common.wrong_answer_count++
+    }
+
+    private fun genFragmentList() {
+        for (i in Common.questionList.indices){
+            val bundle = Bundle()
+            bundle.putInt("index",i)
+            val fragment = QuestionFragment()
+            fragment.arguments = bundle
+
+            Common.fragmentList.add(fragment)
+        }
+    }
+
+    private fun genItems() {
+        for(i in Common.questionList.indices){
+            Common.answerSheetList.add(CurrentQuestion(i, Common.ANSWER_TYPE.NO_ANSWER))
+        }
+    }
+
+    private fun genQuestion() {
+        if(!Common.isOnline){
+            Common.questionList = DBHelper.getInstance(this).getQuestionByCategories(Common.selectedCategory!!.id)
+
+            if (Common.questionList.size==0){
+                MaterialStyledDialog.Builder(this)
+                    .setTitle("Ooops!")
+                    .setIcon(R.drawable.ic_sentiment_dissatisfied_black_24dp)
+                    .setDescription("We don't have any question in this ${Common.selectedCategory!!.name} category")
+                    .setPositiveText("Ok")
+                    .onPositive{ dialog, _ ->
+                        dialog.dismiss()
+                        finish()
+                    }.show()
+            }
+            else
+                setupQuestion()
+
+        }else{
+            OnlineDBHelper.getInstance(this, FirebaseDatabase.getInstance())
+                .readData(object:MyFirebaseCallback{
+                    override fun setQuestionList(questionList: List<Question>) {
+                        Common.questionList.clear()
+                        Common.questionList = questionList as MutableList<Question>
+
+                        if (Common.questionList.size==0){
+                            MaterialStyledDialog.Builder(this@MainQuestionActivity)
+                                .setTitle("Ooops!")
+                                .setIcon(R.drawable.ic_sentiment_dissatisfied_black_24dp)
+                                .setDescription("We don't have any question in this ${Common.selectedCategory!!.name} category")
+                                .setPositiveText("Ok")
+                                .onPositive{ dialog, _ ->
+                                    dialog.dismiss()
+                                    finish()
+                                }.show()
+                        }
+                        else
+                            setupQuestion()
+
+                    }
+
+
+                },Common.selectedCategory!!.name!!.replace(" ","")
+                    .replace("/","_"))
+        }
+
+
+
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun setupQuestion(){
         if(Common.questionList.size > 0){
             txt_timer.visibility = View.VISIBLE
             txt_right_answer.visibility = View.VISIBLE
@@ -132,7 +221,7 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
             if(Common.questionList.size > 0)
                 grid_answer.layoutManager = GridLayoutManager(this,
                     if(Common.questionList.size>5)Common.questionList.size/2
-                else Common.questionList.size)
+                    else Common.questionList.size)
 
             adapter = GridAnswerAdapter(this,Common.answerSheetList)
             grid_answer.adapter = adapter
@@ -156,10 +245,10 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                 var currentScrollDirection = SCROLLING_UBDETERMINED
 
                 private val isScrollingDirectionUndetermined:Boolean
-                get() = currentScrollDirection == SCROLLING_UBDETERMINED
+                    get() = currentScrollDirection == SCROLLING_UBDETERMINED
 
                 private val isScrollingDirectionRight:Boolean
-                get() = currentScrollDirection == SCROLLING_RIGHT
+                    get() = currentScrollDirection == SCROLLING_RIGHT
 
                 private val isScrollingDirectionLeft:Boolean
                     get() = currentScrollDirection == SCROLLING_LEFT
@@ -168,7 +257,7 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                     if(1-positionOffset >=.5f)
                         this.currentScrollDirection = SCROLLING_RIGHT
                     else if(1-positionOffset <=.5f)
-                    this.currentScrollDirection = SCROLLING_LEFT
+                        this.currentScrollDirection = SCROLLING_LEFT
                 }
 
                 override fun onPageScrollStateChanged(p0: Int) {
@@ -226,44 +315,17 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
         }
     }
 
-    private fun countCorrectAnswer() {
-        Common.right_answer_count = 0
-        Common.wrong_answer_count = 0
-
-        for (item in Common.answerSheetList)
-            if (item.type == Common.ANSWER_TYPE.RIGHT_ANSWER)
-                Common.right_answer_count++
-        else if(item.type == Common.ANSWER_TYPE.WRONG_ANSWER)
-                Common.wrong_answer_count++
-    }
-
-    private fun genFragmentList() {
-        for (i in Common.questionList.indices){
-            val bundle = Bundle()
-            bundle.putInt("index",i)
-            val fragment = QuestionFragment()
-            fragment.arguments = bundle
-
-            Common.fragmentList.add(fragment)
-        }
-    }
-
-    private fun genItems() {
-        for(i in Common.questionList.indices){
-            Common.answerSheetList.add(CurrentQuestion(i, Common.ANSWER_TYPE.NO_ANSWER))
-        }
-    }
-
     private fun countTimer() {
         countDownTimer = object:CountDownTimer(Common.TOTAL_TIME.toLong(),1000){
             override fun onFinish() {
                 finishGame()
             }
 
+
             override fun onTick(interval: Long) {
                 txt_timer.text = (java.lang.String.format("%02d:%02d",
                     TimeUnit.MILLISECONDS.toMinutes(interval),
-                TimeUnit.MILLISECONDS.toSeconds(interval) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(interval))))
+                    TimeUnit.MILLISECONDS.toSeconds(interval) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(interval))))
                 time_play-=1000
             }
         }.start()
@@ -299,22 +361,6 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
         startActivityForResult(intent, CODE_GET_RESULT)
     }
 
-    private fun genQuestion() {
-        Common.questionList = DBHelper.getInstance(this).getQuestionByCategories(Common.selectedCategory!!.id)
-
-        if (Common.questionList.size==0){
-            MaterialStyledDialog.Builder(this)
-                .setTitle("Ooops!")
-                .setIcon(R.drawable.ic_sentiment_dissatisfied_black_24dp)
-                .setDescription("We don't have any question in this ${Common.selectedCategory!!.name} category")
-                .setPositiveText("Ok")
-                .onPositive{ dialog, _ ->
-                    dialog.dismiss()
-                    finish()
-                }.show()
-        }
-    }
-
     override fun onBackPressed() {
         val drawerLayout: DrawerLayout = findViewById(R.id.drawer_layout)
         if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
@@ -348,43 +394,15 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                         .setDescription("do you really want to finish?")
                         .setIcon(R.drawable.ic_mood_white_24dp)
                         .setNegativeText("No")
-                        .onNegative { dialog, which ->  dialog.dismiss()}
+                        .onNegative { dialog, _ ->  dialog.dismiss()}
                         .setPositiveText("Yes")
-                        .onPositive { dialog, which ->  finishGame()
-                            drawer_layout.closeDrawer(Gravity.LEFT)
+                        .onPositive { _, _ ->  finishGame()
+                            drawer_layout.closeDrawer(Gravity.START)
                         }.show()
                 }else
                     finishGame()
             }
         }
-        return true
-    }
-
-
-    override fun onNavigationItemSelected(item: MenuItem): Boolean {
-        // Handle navigation view item clicks here.
-        when (item.itemId) {
-            R.id.nav_home -> {
-                // Handle the camera action
-            }
-            R.id.nav_gallery -> {
-
-            }
-            R.id.nav_slideshow -> {
-
-            }
-            R.id.nav_tools -> {
-
-            }
-            R.id.nav_share -> {
-
-            }
-            R.id.nav_send -> {
-
-            }
-        }
-        val drawerLayout: DrawerLayout = findViewById(R.id.drawer_layout)
-        drawerLayout.closeDrawer(GravityCompat.START)
         return true
     }
 
@@ -398,7 +416,7 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                     view_pager.currentItem = questionIndex
 
                     isAnswerModeView = true
-                    countDownTimer!!.cancel()
+                    countDownTimer.cancel()
 
                     txt_wrong_answer.visibility = View.GONE
                     txt_right_answer.visibility = View.GONE
@@ -406,7 +424,7 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                 }
                 else
                 {
-                    if (action.equals("doquizagain"))
+                    if (action == "doquizagain")
                     {
                         view_pager.currentItem = 0
                         isAnswerModeView = false
@@ -428,11 +446,11 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
 
                         countTimer()
                     }
-                    else if(action.equals("viewanswer"))
+                    else if(action == "viewanswer")
                     {
                         view_pager.currentItem = 0
                         isAnswerModeView = true
-                        countDownTimer!!.cancel()
+                        countDownTimer.cancel()
 
                         txt_wrong_answer.visibility = View.GONE
                         txt_right_answer.visibility = View.GONE
@@ -447,6 +465,5 @@ class MainQuestionActivity : AppCompatActivity(), NavigationView.OnNavigationIte
                 }
             }
         }
-
     }
 }

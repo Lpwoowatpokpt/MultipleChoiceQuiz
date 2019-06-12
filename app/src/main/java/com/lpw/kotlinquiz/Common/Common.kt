@@ -24,6 +24,8 @@ object Common {
     var data_question = StringBuilder()
     val KEY_GO_TO_QUESTION: String?="position_go_to"
     val KEY_BACK_FROM_RESULT: String?="back_from_result"
+    val KEY_ONLINE_MODE: String?="ONLINE_MODE"
+    var isOnline = false
 
     enum class ANSWER_TYPE{
         NO_ANSWER,

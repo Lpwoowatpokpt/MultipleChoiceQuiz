@@ -72,9 +72,9 @@ class ResultActivity : AppCompatActivity() {
             .setDescription("do you really want to delete this data?")
             .setIcon(R.drawable.ic_mood_white_24dp)
             .setNegativeText("No")
-            .onNegative { dialog, which ->  dialog.dismiss()}
+            .onNegative { dialog, _ ->  dialog.dismiss()}
             .setPositiveText("Yes")
-            .onPositive { dialog, which ->
+            .onPositive { _, _ ->
 
                 val returnIntent = Intent()
                 returnIntent.putExtra("action" , "doquizagain")

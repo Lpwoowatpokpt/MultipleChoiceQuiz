@@ -175,28 +175,28 @@ class QuestionFragment : Fragment(), IAnswerSelect {
             ckb_D = itemView.findViewById(R.id.ckb_D) as CheckBox
             ckb_D.text = question!!.answerD
 
-            ckb_A.setOnCheckedChangeListener { compoundButton, isChecked ->
+            ckb_A.setOnCheckedChangeListener { _, isChecked ->
                 if (isChecked)
                     Common.selected_values.add(ckb_A.text.toString())
                 else
                     Common.selected_values.remove(ckb_A.text.toString())
             }
 
-            ckb_B.setOnCheckedChangeListener { compoundButton, isChecked ->
+            ckb_B.setOnCheckedChangeListener { _, isChecked ->
                 if (isChecked)
                     Common.selected_values.add(ckb_B.text.toString())
                 else
                     Common.selected_values.remove(ckb_B.text.toString())
             }
 
-            ckb_C.setOnCheckedChangeListener { compoundButton, isChecked ->
+            ckb_C.setOnCheckedChangeListener { _, isChecked ->
                 if (isChecked)
                     Common.selected_values.add(ckb_C.text.toString())
                 else
                     Common.selected_values.remove(ckb_C.text.toString())
             }
 
-            ckb_D.setOnCheckedChangeListener { compoundButton, isChecked ->
+            ckb_D.setOnCheckedChangeListener { _, isChecked ->
                 if (isChecked)
                     Common.selected_values.add(ckb_D.text.toString())
                 else
